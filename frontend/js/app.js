@@ -24,7 +24,7 @@ navLinks.forEach(link => {
     link.addEventListener('click', (e) => {
         navLinks.forEach(l => l.classList.remove('active'));
         e.currentTarget.classList.add('active');
-        
+
         const targetId = e.currentTarget.getAttribute('data-target');
         views.forEach(v => v.classList.remove('active'));
         document.getElementById(targetId).classList.add('active');
@@ -52,12 +52,12 @@ async function init() {
     try {
         const res = await fetch('/api/health');
         state.health = await res.json();
-        
+
         if (state.health.setup_required) {
             showSetup();
             return;
         }
-        
+
         if (state.health.auth_enabled) {
             showAuth();
             return;
@@ -75,7 +75,7 @@ function showSetup() {
     mainUI.classList.add('hidden');
     authTitle.textContent = "First-Boot Setup";
     authSubtitle.textContent = "Set an admin password to secure GPIO-UA";
-    
+
     authForm.onsubmit = async (e) => {
         e.preventDefault();
         try {
@@ -102,7 +102,7 @@ function showAuth() {
     authTitle.textContent = "Login";
     authSubtitle.textContent = "Enter your admin password.";
     authPassword.value = '';
-    
+
     authForm.onsubmit = async (e) => {
         e.preventDefault();
         state.authCredentials = authPassword.value;
@@ -119,10 +119,11 @@ function showAuth() {
 async function loadApp() {
     authOverlay.classList.add('hidden');
     mainUI.classList.remove('hidden');
-    
+
     await fetchConfig();
     setupWebSocket();
     startHealthPoll();
+    startLogPoll();
 }
 
 // Configuration logic
@@ -135,7 +136,7 @@ async function fetchConfig() {
 function populateConfigUI() {
     document.getElementById('config-port').value = state.config.web_port || 8080;
     document.getElementById('config-auth-toggle').checked = state.config.auth_enabled || false;
-    
+
     const tbody = document.querySelector('#sensors-table tbody');
     tbody.innerHTML = '';
     (state.config.sensors || []).forEach((sensor, index) => {
@@ -172,13 +173,13 @@ document.getElementById('add-sensor-form').onsubmit = async (e) => {
         type: document.getElementById('new-sensor-type').value
     };
     const sensors = [...(state.config.sensors || []), newSensor];
-    
+
     await apiFetch('/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sensors })
     });
-    
+
     // Clear form and refetch
     e.target.reset();
     await fetchConfig();
@@ -199,20 +200,20 @@ window.removeSensor = async (index) => {
 function setupWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     state.ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
-    
+
     state.ws.onopen = () => {
         statusIndicator.classList.remove('offline');
         statusIndicator.classList.add('online');
         healthStatusText.textContent = "Connected";
     };
-    
+
     state.ws.onclose = () => {
         statusIndicator.classList.remove('online');
         statusIndicator.classList.add('offline');
         healthStatusText.textContent = "Disconnected (Reconnecting...)";
         setTimeout(setupWebSocket, 3000);
     };
-    
+
     state.ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'tag_update') {
@@ -226,7 +227,7 @@ function updateWatchlist(data) {
     activeTags.set(data.tag, data);
     const tbody = document.querySelector('#watchlist-table tbody');
     tbody.innerHTML = '';
-    
+
     for (const [tag, info] of activeTags.entries()) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -243,13 +244,13 @@ function startHealthPoll() {
         try {
             const res = await fetch('/api/health');
             const data = await res.json();
-            
+
             document.getElementById('cpu-bar').style.width = `${data.cpu_usage}%`;
             document.getElementById('cpu-text').textContent = `${data.cpu_usage.toFixed(1)}%`;
-            
+
             document.getElementById('mem-bar').style.width = `${data.memory_usage}%`;
             document.getElementById('mem-text').textContent = `${data.memory_usage.toFixed(1)}%`;
-            
+
             document.getElementById('uptime-text').textContent = formatUptime(data.uptime);
         } catch (e) {
             console.error("Health poll failed");
@@ -258,10 +259,30 @@ function startHealthPoll() {
 }
 
 function formatUptime(seconds) {
-    const d = Math.floor(seconds / (3600*24));
-    const h = Math.floor(seconds % (3600*24) / 3600);
+    const d = Math.floor(seconds / (3600 * 24));
+    const h = Math.floor(seconds % (3600 * 24) / 3600);
     const m = Math.floor(seconds % 3600 / 60);
     return `${d}d ${h}h ${m}m`;
+}
+
+// Log Viewer
+function startLogPoll() {
+    const logWindow = document.getElementById('log-window');
+    setInterval(async () => {
+        try {
+            const res = await fetch('/api/logs');
+            const data = await res.json();
+            logWindow.innerHTML = '';
+            (data.logs || []).forEach(line => {
+                const div = document.createElement('div');
+                div.textContent = line;
+                logWindow.appendChild(div);
+            });
+            logWindow.scrollTop = logWindow.scrollHeight;
+        } catch (e) {
+            console.error("Log poll failed");
+        }
+    }, 3000);
 }
 
 // Start app

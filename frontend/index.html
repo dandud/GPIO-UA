@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPIO-UA Console</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Auth Overlay (Login/Setup) -->
+        <div id="auth-overlay" class="hidden">
+            <div class="glass-card auth-card">
+                <h2 id="auth-title">Login</h2>
+                <p id="auth-subtitle" class="subtext">Enter your admin credentials.</p>
+                <form id="auth-form">
+                    <input type="password" id="auth-password" placeholder="Password" required>
+                    <button type="submit" class="btn-primary">Submit</button>
+                    <div id="auth-error" class="error-msg"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div id="main-ui" class="hidden">
+            <nav class="sidebar glass-panel">
+                <div class="brand">
+                    <div class="logo-icon"></div>
+                    <h2>GPIO-UA</h2>
+                </div>
+                <ul class="nav-links">
+                    <li class="active" data-target="dashboard-view">Dashboard</li>
+                    <li data-target="config-view">Configuration</li>
+                    <li data-target="logs-view">System Logs</li>
+                </ul>
+                <div class="server-status">
+                    <span class="status-indicator online"></span>
+                    <span id="health-status-text">Connecting...</span>
+                </div>
+            </nav>
+
+            <main class="content-area">
+                <!-- Dashboard View -->
+                <section id="dashboard-view" class="view active">
+                    <header>
+                        <h1>Real-Time Dashboard</h1>
+                        <p class="subtext">Monitor your OPC UA Edge Node</p>
+                    </header>
+                    <div class="grid-2">
+                        <!-- Watchlist -->
+                        <div class="glass-card">
+                            <h3>Tag Watchlist</h3>
+                            <div class="table-container">
+                                <table id="watchlist-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tag Name</th>
+                                            <th>Value</th>
+                                            <th>Quality</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Dynamically populated -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Mini Health/Map -->
+                        <div class="glass-card">
+                            <h3>System Health</h3>
+                            <div class="health-stats">
+                                <div class="stat-box">
+                                    <h4>CPU Usage</h4>
+                                    <div class="progress-bar"><div id="cpu-bar" class="fill" style="width: 0%"></div></div>
+                                    <span id="cpu-text">0%</span>
+                                </div>
+                                <div class="stat-box">
+                                    <h4>Memory</h4>
+                                    <div class="progress-bar"><div id="mem-bar" class="fill" style="width: 0%"></div></div>
+                                    <span id="mem-text">0%</span>
+                                </div>
+                                <div class="stat-box">
+                                    <h4>Uptime</h4>
+                                    <span id="uptime-text">0s</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Configuration View -->
+                <section id="config-view" class="view hidden">
+                    <header>
+                        <h1>Configuration Manager</h1>
+                    </header>
+                    
+                    <div class="glass-card">
+                        <h3>Network & Security</h3>
+                        <form id="network-config-form">
+                            <div class="form-group">
+                                <label>Web Interface Port</label>
+                                <input type="number" id="config-port" value="8080">
+                            </div>
+                            <div class="form-group row-align">
+                                <label>Require Authentication</label>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="config-auth-toggle">
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                            <button type="submit" class="btn-primary">Save Network Settings</button>
+                        </form>
+                    </div>
+
+                    <div class="glass-card mt-4">
+                        <h3>Sensor Provisioning</h3>
+                        <div class="table-container">
+                            <table id="sensors-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tag Name</th>
+                                        <th>Pin</th>
+                                        <th>Type</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamically populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <form id="add-sensor-form" class="inline-form mt-2">
+                            <input type="text" id="new-sensor-tag" placeholder="Tag Name (e.g., TempRoom1)" required>
+                            <input type="number" id="new-sensor-pin" placeholder="Pin/Address" required>
+                            <select id="new-sensor-type">
+                                <option value="gpio">GPIO</option>
+                                <option value="i2c">I2C</option>
+                                <option value="spi">SPI</option>
+                            </select>
+                            <button type="submit" class="btn-secondary">Add Node</button>
+                        </form>
+                    </div>
+                </section>
+                
+                <!-- Logs View -->
+                <section id="logs-view" class="view hidden">
+                    <header>
+                        <h1>Terminal Logs</h1>
+                    </header>
+                    <div class="terminal-window glass-card" id="log-window">
+                        <!-- Logs stream here -->
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+    
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# Environments
+venv/
+env/
+.env
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs
+*.log
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.code-workspace
+
+# OS config files
+.DS_Store
+Thumbs.db
+
+# Project specific deployment artifacts
+config.json

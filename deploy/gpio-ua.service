@@ -1,0 +1,14 @@
+[Unit]
+Description=GPIO-UA Headless OPC UA Edge Node
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/gpio-ua
+ExecStart=/opt/gpio-ua/venv/bin/python backend/main.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

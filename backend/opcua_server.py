@@ -12,44 +12,51 @@ class OpcUaServerWrapper:
         self.task = None
         self.is_running = False
         self.nodes = {}
+        self.directions = {}  # tag -> "input" | "output"
 
     async def init_server(self, config):
         await self.server.init()
-        # Set endpoint
-        # TODO: Allow network interface configuration
         self.server.set_endpoint("opc.tcp://0.0.0.0:4840/freeopcua/server/")
         self.server.set_server_name("GPIO-UA Edge Node")
         
-        # Setup address space
         uri = "http://gpio-ua.local"
         idx = await self.server.register_namespace(uri)
         
         objects = self.server.nodes.objects
         self.device_obj = await objects.add_object(idx, "Sensors")
         
-        # Build nodes from config
         self.nodes.clear()
+        self.directions.clear()
         sensors = config.get("sensors", [])
         hardware_bridge.setup_sensors(sensors)
         
         for sensor in sensors:
             tag = sensor.get("tag_name")
-            # Default to boolean for now
+            direction = sensor.get("direction", "input")
             node = await self.device_obj.add_variable(idx, tag, False)
-            await node.set_writable()
+            # Only output tags need to be writable from OPC UA clients
+            if direction == "output":
+                await node.set_writable()
             self.nodes[tag] = node
+            self.directions[tag] = direction
 
     async def run(self):
         self.is_running = True
         logger.info("Starting OPC UA Server...")
         async with self.server:
             while self.is_running:
-                # Read hardware
                 values = hardware_bridge.read_all()
                 for tag, value in values.items():
                     if tag in self.nodes:
+                        direction = self.directions.get(tag, "input")
+                        if direction == "output":
+                            # For outputs, check if an OPC UA client wrote a new value
+                            opcua_val = await self.nodes[tag].read_value()
+                            if bool(opcua_val) != bool(value):
+                                # Client wrote a new value — apply it to hardware
+                                hardware_bridge.write(tag, bool(opcua_val))
+                        # Always update the OPC UA node and UI with current state
                         await self.nodes[tag].write_value(value)
-                        # Broadcast to UI
                         await ws_manager.broadcast_tag_update(tag, value, "Good")
                 await asyncio.sleep(0.5)
 

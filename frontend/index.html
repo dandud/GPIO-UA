@@ -137,6 +137,7 @@
                                         <th>Tag Name</th>
                                         <th>GPIO</th>
                                         <th>Type</th>
+                                        <th>Direction</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -150,6 +151,10 @@
                                 <option value="gpio">GPIO</option>
                                 <option value="i2c">I2C</option>
                                 <option value="spi">SPI</option>
+                            </select>
+                            <select id="new-sensor-direction">
+                                <option value="input">Input</option>
+                                <option value="output">Output</option>
                             </select>
                             <button type="submit" class="btn-secondary">Add Node</button>
                         </form>

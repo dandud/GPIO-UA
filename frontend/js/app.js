@@ -142,10 +142,14 @@ function populateConfigUI() {
     tbody.innerHTML = '';
     (state.config.sensors || []).forEach((sensor, index) => {
         const tr = document.createElement('tr');
+        const dirBadge = sensor.direction === 'output'
+            ? '<span style="color:var(--secondary)">⬆ Output</span>'
+            : '<span style="color:var(--success)">⬇ Input</span>';
         tr.innerHTML = `
             <td>${sensor.tag_name}</td>
             <td>${sensor.gpio}</td>
             <td>${sensor.type.toUpperCase()}</td>
+            <td>${dirBadge}</td>
             <td><button class="btn-danger" onclick="removeSensor(${index})">Remove</button></td>
         `;
         tbody.appendChild(tr);
@@ -171,7 +175,8 @@ document.getElementById('add-sensor-form').onsubmit = async (e) => {
     const newSensor = {
         tag_name: document.getElementById('new-sensor-tag').value,
         gpio: parseInt(document.getElementById('new-sensor-gpio').value),
-        type: document.getElementById('new-sensor-type').value
+        type: document.getElementById('new-sensor-type').value,
+        direction: document.getElementById('new-sensor-direction').value
     };
     const sensors = [...(state.config.sensors || []), newSensor];
 
@@ -327,7 +332,7 @@ function createPinDot(pinDef, sensorMap, tooltip) {
         let html = `<div class="tt-pin">Pin ${phys} &middot; ${label}</div>`;
         if (bcm !== null) html += `<div class="tt-func">BCM ${bcm} &middot; ${type.toUpperCase()}</div>`;
         if (sensor) {
-            html += `<div class="tt-tag">Tag: ${sensor.tag_name}</div>`;
+            html += `<div class="tt-tag">Tag: ${sensor.tag_name} (${sensor.direction || 'input'})</div>`;
             html += `<div class="tt-value">Value: ${liveVal ? liveVal.value : '—'}</div>`;
         }
         tooltip.innerHTML = html;
@@ -379,15 +384,39 @@ function updateWatchlist(data) {
     const tbody = document.querySelector('#watchlist-table tbody');
     tbody.innerHTML = '';
 
+    const sensors = state.config?.sensors || [];
     for (const [tag, info] of activeTags.entries()) {
+        const sensor = sensors.find(s => s.tag_name === tag);
+        const isOutput = sensor?.direction === 'output';
         const tr = document.createElement('tr');
+        const outBadge = isOutput ? ' <span style="color:var(--secondary);font-size:0.7rem">OUT</span>' : '';
+        const toggleBtn = isOutput
+            ? ` <button class="btn-toggle-output" data-tag="${tag}" data-val="${info.value ? 'false' : 'true'}" style="margin-left:0.5rem;padding:2px 8px;font-size:0.7rem;border-radius:4px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.08);color:var(--text-main);cursor:pointer">${info.value ? 'Turn OFF' : 'Turn ON'}</button>`
+            : '';
         tr.innerHTML = `
-            <td><strong>${tag}</strong></td>
-            <td style="color: ${info.value ? 'var(--success)' : 'var(--text-main)'}">${info.value}</td>
+            <td><strong>${tag}</strong>${outBadge}</td>
+            <td style="color: ${info.value ? 'var(--success)' : 'var(--text-main)'}">${info.value}${toggleBtn}</td>
             <td>${info.quality}</td>
         `;
         tbody.appendChild(tr);
     }
+
+    // Attach toggle listeners for output tags
+    tbody.querySelectorAll('.btn-toggle-output').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const tag = btn.dataset.tag;
+            const val = btn.dataset.val === 'true';
+            try {
+                await apiFetch('/write', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tag, value: val })
+                });
+            } catch (e) {
+                console.error('Write failed', e);
+            }
+        });
+    });
 }
 
 function updatePinMapLive(data) {

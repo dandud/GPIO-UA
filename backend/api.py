@@ -29,6 +29,7 @@ class SensorConfig(BaseModel):
     tag_name: str
     gpio: int
     type: str = "gpio"
+    direction: str = "input"  # "input" or "output"
 
 class ConfigUpdate(BaseModel):
     web_port: Optional[int] = None
@@ -132,4 +133,17 @@ async def check_auth(username: str = Depends(get_current_user)):
 async def get_logs():
     """Return the most recent application log entries."""
     return {"logs": list(log_buffer)}
+
+class WriteCommand(BaseModel):
+    tag: str
+    value: bool
+
+@router.post("/write")
+async def write_tag(cmd: WriteCommand, username: str = Depends(get_current_user)):
+    """Write a value to an output tag."""
+    from hardware_bridge import hardware_bridge
+    ok = hardware_bridge.write(cmd.tag, cmd.value)
+    if not ok:
+        raise HTTPException(status_code=400, detail=f"Cannot write to tag '{cmd.tag}'. Check it is configured as output.")
+    return {"message": f"Set {cmd.tag} = {cmd.value}"}
 

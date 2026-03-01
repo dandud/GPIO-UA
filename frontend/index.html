@@ -50,9 +50,9 @@
                         <h1>Real-Time Dashboard</h1>
                         <p class="subtext">Monitor your OPC UA Edge Node</p>
                     </header>
-                    <div class="grid-2">
+                    <div class="dashboard-grid">
                         <!-- Watchlist -->
-                        <div class="glass-card">
+                        <div class="glass-card dashboard-watchlist">
                             <h3>Tag Watchlist</h3>
                             <div class="table-container">
                                 <table id="watchlist-table">
@@ -63,17 +63,24 @@
                                             <th>Quality</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        <!-- Dynamically populated -->
-                                    </tbody>
+                                    <tbody></tbody>
                                 </table>
                             </div>
                         </div>
 
-                        <!-- Mini Health/Map -->
-                        <div class="glass-card">
+                        <!-- Live Pin Map -->
+                        <div class="glass-card dashboard-pinmap">
+                            <h3>40-Pin Header</h3>
+                            <div class="pin-map-container">
+                                <div class="pin-tooltip" id="pin-tooltip"></div>
+                                <div class="pin-header" id="pin-header"></div>
+                            </div>
+                        </div>
+
+                        <!-- System Health -->
+                        <div class="glass-card dashboard-health">
                             <h3>System Health</h3>
-                            <div class="health-stats">
+                            <div class="health-stats-row">
                                 <div class="stat-box">
                                     <h4>CPU Usage</h4>
                                     <div class="progress-bar">
@@ -133,9 +140,7 @@
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <!-- Dynamically populated -->
-                                </tbody>
+                                <tbody></tbody>
                             </table>
                         </div>
                         <form id="add-sensor-form" class="inline-form mt-2">
@@ -156,9 +161,7 @@
                     <header>
                         <h1>Terminal Logs</h1>
                     </header>
-                    <div class="terminal-window glass-card" id="log-window">
-                        <!-- Logs stream here -->
-                    </div>
+                    <div class="terminal-window glass-card" id="log-window"></div>
                 </section>
             </main>
         </div>

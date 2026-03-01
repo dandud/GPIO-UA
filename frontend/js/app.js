@@ -121,6 +121,7 @@ async function loadApp() {
     mainUI.classList.remove('hidden');
 
     await fetchConfig();
+    renderPinMap();
     setupWebSocket();
     startHealthPoll();
     startLogPoll();
@@ -183,6 +184,7 @@ document.getElementById('add-sensor-form').onsubmit = async (e) => {
     // Clear form and refetch
     e.target.reset();
     await fetchConfig();
+    renderPinMap(); // refresh pin map after sensor change
 };
 
 window.removeSensor = async (index) => {
@@ -194,7 +196,155 @@ window.removeSensor = async (index) => {
         body: JSON.stringify({ sensors })
     });
     await fetchConfig();
+    renderPinMap();
 };
+
+// ===========================
+//  Raspberry Pi 40-Pin Map
+// ===========================
+
+// Full 40-pin header definition (physical pin 1-40)
+// Each entry: [physicalPin, label, type, bcmGpio]
+// type: '3v3', '5v', 'gnd', 'gpio', 'i2c', 'spi', 'uart', 'eeprom', 'pcm'
+const PIN_LAYOUT = [
+    // Row 1: physical pins 1 (left) – 2 (right)
+    [1, '3V3', '3v3', null], [2, '5V', '5v', null],
+    [3, 'GPIO2', 'i2c', 2], [4, '5V', '5v', null],
+    [5, 'GPIO3', 'i2c', 3], [6, 'GND', 'gnd', null],
+    [7, 'GPIO4', 'gpio', 4], [8, 'GPIO14', 'uart', 14],
+    [9, 'GND', 'gnd', null], [10, 'GPIO15', 'uart', 15],
+    [11, 'GPIO17', 'gpio', 17], [12, 'GPIO18', 'pcm', 18],
+    [13, 'GPIO27', 'gpio', 27], [14, 'GND', 'gnd', null],
+    [15, 'GPIO22', 'gpio', 22], [16, 'GPIO23', 'gpio', 23],
+    [17, '3V3', '3v3', null], [18, 'GPIO24', 'gpio', 24],
+    [19, 'GPIO10', 'spi', 10], [20, 'GND', 'gnd', null],
+    [21, 'GPIO9', 'spi', 9], [22, 'GPIO25', 'gpio', 25],
+    [23, 'GPIO11', 'spi', 11], [24, 'GPIO8', 'spi', 8],
+    [25, 'GND', 'gnd', null], [26, 'GPIO7', 'spi', 7],
+    [27, 'ID_SD', 'eeprom', null], [28, 'ID_SC', 'eeprom', null],
+    [29, 'GPIO5', 'gpio', 5], [30, 'GND', 'gnd', null],
+    [31, 'GPIO6', 'gpio', 6], [32, 'GPIO12', 'gpio', 12],
+    [33, 'GPIO13', 'gpio', 13], [34, 'GND', 'gnd', null],
+    [35, 'GPIO19', 'pcm', 19], [36, 'GPIO16', 'gpio', 16],
+    [37, 'GPIO26', 'gpio', 26], [38, 'GPIO20', 'pcm', 20],
+    [39, 'GND', 'gnd', null], [40, 'GPIO21', 'pcm', 21],
+];
+
+// Build a lookup: BCM GPIO number → configured sensor info
+function buildPinSensorMap() {
+    const map = {};
+    (state.config?.sensors || []).forEach(s => {
+        map[s.pin] = s;
+    });
+    return map;
+}
+
+const pinElements = {}; // physical pin number → DOM element
+
+function renderPinMap() {
+    const container = document.getElementById('pin-header');
+    const tooltip = document.getElementById('pin-tooltip');
+    container.innerHTML = '';
+
+    const sensorMap = buildPinSensorMap();
+
+    // Render 20 rows × 2 pins each
+    for (let row = 0; row < 20; row++) {
+        const leftPin = PIN_LAYOUT[row * 2];
+        const rightPin = PIN_LAYOUT[row * 2 + 1];
+
+        // Left label
+        const leftLabel = document.createElement('span');
+        leftLabel.className = 'pin-row-label';
+        leftLabel.textContent = leftPin[1];
+        container.appendChild(leftLabel);
+
+        // Left pin dot
+        const leftDot = createPinDot(leftPin, sensorMap, tooltip);
+        container.appendChild(leftDot);
+
+        // Center gap
+        const gap = document.createElement('span');
+        gap.className = 'pin-gap-col';
+        container.appendChild(gap);
+
+        // Right pin dot
+        const rightDot = createPinDot(rightPin, sensorMap, tooltip);
+        container.appendChild(rightDot);
+
+        // Right label
+        const rightLabel = document.createElement('span');
+        rightLabel.className = 'pin-row-label right';
+        rightLabel.textContent = rightPin[1];
+        container.appendChild(rightLabel);
+    }
+
+    // Legend
+    const parent = container.parentElement;
+    let legend = parent.querySelector('.pin-legend');
+    if (!legend) {
+        legend = document.createElement('div');
+        legend.className = 'pin-legend';
+        legend.innerHTML = [
+            ['pin-power-3v3', '3.3V'],
+            ['pin-power-5v', '5V'],
+            ['pin-gnd', 'GND'],
+            ['pin-gpio', 'GPIO'],
+            ['pin-i2c', 'I2C'],
+            ['pin-spi', 'SPI'],
+            ['pin-uart', 'UART'],
+        ].map(([cls, name]) =>
+            `<span class="legend-item"><span class="legend-dot ${cls}"></span>${name}</span>`
+        ).join('');
+        parent.appendChild(legend);
+    }
+}
+
+function createPinDot(pinDef, sensorMap, tooltip) {
+    const [phys, label, type, bcm] = pinDef;
+    const dot = document.createElement('div');
+    dot.className = `pin-dot pin-${type === '3v3' ? 'power-3v3' : type === '5v' ? 'power-5v' : type}`;
+    dot.textContent = phys;
+    dot.dataset.phys = phys;
+    dot.dataset.bcm = bcm ?? '';
+    dot.dataset.label = label;
+    dot.dataset.type = type;
+
+    // Highlight if configured
+    const sensor = bcm !== null ? sensorMap[bcm] : null;
+    if (sensor) {
+        dot.classList.add('pin-active');
+        dot.dataset.tag = sensor.tag_name;
+    }
+
+    pinElements[phys] = dot;
+
+    // Tooltip events
+    dot.addEventListener('mouseenter', (e) => {
+        const sensor = bcm !== null ? buildPinSensorMap()[bcm] : null;
+        const liveVal = activeTags.get(sensor?.tag_name);
+
+        let html = `<div class="tt-pin">Pin ${phys} &middot; ${label}</div>`;
+        if (bcm !== null) html += `<div class="tt-func">BCM ${bcm} &middot; ${type.toUpperCase()}</div>`;
+        if (sensor) {
+            html += `<div class="tt-tag">Tag: ${sensor.tag_name}</div>`;
+            html += `<div class="tt-value">Value: ${liveVal ? liveVal.value : '—'}</div>`;
+        }
+        tooltip.innerHTML = html;
+        tooltip.classList.add('visible');
+
+        const rect = dot.getBoundingClientRect();
+        const containerRect = dot.closest('.pin-map-container').getBoundingClientRect();
+        tooltip.style.left = (rect.left - containerRect.left + rect.width / 2) + 'px';
+        tooltip.style.top = (rect.top - containerRect.top - tooltip.offsetHeight - 8) + 'px';
+    });
+
+    dot.addEventListener('mouseleave', () => {
+        tooltip.classList.remove('visible');
+    });
+
+    return dot;
+}
 
 // Dashboard & WebSockets
 function setupWebSocket() {
@@ -218,6 +368,7 @@ function setupWebSocket() {
         const data = JSON.parse(event.data);
         if (data.type === 'tag_update') {
             updateWatchlist(data);
+            updatePinMapLive(data);
         }
     };
 }
@@ -236,6 +387,24 @@ function updateWatchlist(data) {
             <td>${info.quality}</td>
         `;
         tbody.appendChild(tr);
+    }
+}
+
+function updatePinMapLive(data) {
+    // Find which pin has this tag and update its visual state
+    const sensors = state.config?.sensors || [];
+    const sensor = sensors.find(s => s.tag_name === data.tag);
+    if (!sensor) return;
+
+    // Find the physical pin for this BCM GPIO
+    for (const [phys, label, type, bcm] of PIN_LAYOUT) {
+        if (bcm === sensor.pin) {
+            const dot = pinElements[phys];
+            if (dot) {
+                dot.classList.toggle('pin-value-high', !!data.value);
+            }
+            break;
+        }
     }
 }
 

@@ -27,9 +27,14 @@ logging.getLogger().addHandler(_handler)
 
 class SensorConfig(BaseModel):
     tag_name: str
-    gpio: int
     type: str = "gpio"
+    # GPIO fields
+    gpio: Optional[int] = None
     direction: str = "input"  # "input" or "output"
+    # I2C fields
+    address: Optional[str] = None     # e.g. "0x76"
+    driver: Optional[str] = None      # e.g. "BME280"
+    channel: Optional[int] = None     # for ADC drivers
 
 class ConfigUpdate(BaseModel):
     web_port: Optional[int] = None
@@ -146,4 +151,10 @@ async def write_tag(cmd: WriteCommand, username: str = Depends(get_current_user)
     if not ok:
         raise HTTPException(status_code=400, detail=f"Cannot write to tag '{cmd.tag}'. Check it is configured as output.")
     return {"message": f"Set {cmd.tag} = {cmd.value}"}
+
+@router.get("/drivers")
+async def list_drivers():
+    """Return available I2C driver info for frontend form."""
+    from i2c_drivers import get_driver_info
+    return get_driver_info()
 

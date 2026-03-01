@@ -32,13 +32,25 @@ class OpcUaServerWrapper:
         
         for sensor in sensors:
             tag = sensor.get("tag_name")
+            sensor_type = sensor.get("type", "gpio")
             direction = sensor.get("direction", "input")
-            node = await self.device_obj.add_variable(idx, tag, False)
-            # Only output tags need to be writable from OPC UA clients
-            if direction == "output":
-                await node.set_writable()
-            self.nodes[tag] = node
-            self.directions[tag] = direction
+            
+            if sensor_type == "i2c":
+                # I2C sensors create multiple sub-tags (e.g., tag.temperature, tag.humidity)
+                fields = hardware_bridge.get_i2c_fields(tag)
+                for field_name, unit in fields:
+                    sub_tag = f"{tag}.{field_name}"
+                    node = await self.device_obj.add_variable(idx, sub_tag, 0.0)
+                    # I2C tags are read-only
+                    self.nodes[sub_tag] = node
+                    self.directions[sub_tag] = "input"
+            else:
+                # GPIO sensor — single boolean tag
+                node = await self.device_obj.add_variable(idx, tag, False)
+                if direction == "output":
+                    await node.set_writable()
+                self.nodes[tag] = node
+                self.directions[tag] = direction
 
     async def run(self):
         self.is_running = True
@@ -53,7 +65,6 @@ class OpcUaServerWrapper:
                             # For outputs, check if an OPC UA client wrote a new value
                             opcua_val = await self.nodes[tag].read_value()
                             if bool(opcua_val) != bool(value):
-                                # Client wrote a new value — apply it to hardware
                                 hardware_bridge.write(tag, bool(opcua_val))
                         # Always update the OPC UA node and UI with current state
                         await self.nodes[tag].write_value(value)

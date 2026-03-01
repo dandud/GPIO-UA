@@ -2,7 +2,8 @@ const state = {
     authCredentials: null,
     config: null,
     health: null,
-    ws: null
+    ws: null,
+    drivers: {}  // I2C driver info from backend
 };
 
 // DOM Elements
@@ -121,6 +122,7 @@ async function loadApp() {
     mainUI.classList.remove('hidden');
 
     await fetchConfig();
+    await fetchDrivers();
     renderPinMap();
     setupWebSocket();
     startHealthPoll();
@@ -142,14 +144,20 @@ function populateConfigUI() {
     tbody.innerHTML = '';
     (state.config.sensors || []).forEach((sensor, index) => {
         const tr = document.createElement('tr');
-        const dirBadge = sensor.direction === 'output'
-            ? '<span style="color:var(--secondary)">⬆ Output</span>'
-            : '<span style="color:var(--success)">⬇ Input</span>';
+        let detail = '';
+        if (sensor.type === 'i2c') {
+            detail = `<span style="color:var(--accent-blue)">${sensor.driver || '?'}</span> @ ${sensor.address || '?'}`;
+            if (sensor.channel != null) detail += ` ch${sensor.channel}`;
+        } else {
+            const dirBadge = sensor.direction === 'output'
+                ? '<span style="color:var(--secondary)">⬆ OUT</span>'
+                : '<span style="color:var(--success)">⬇ IN</span>';
+            detail = `GPIO ${sensor.gpio} ${dirBadge}`;
+        }
         tr.innerHTML = `
             <td>${sensor.tag_name}</td>
-            <td>${sensor.gpio}</td>
             <td>${sensor.type.toUpperCase()}</td>
-            <td>${dirBadge}</td>
+            <td>${detail}</td>
             <td><button class="btn-danger" onclick="removeSensor(${index})">Remove</button></td>
         `;
         tbody.appendChild(tr);
@@ -170,26 +178,77 @@ document.getElementById('network-config-form').onsubmit = async (e) => {
     });
 };
 
+// Type selector toggle
+const typeSelect = document.getElementById('new-sensor-type');
+const gpioFields = document.getElementById('gpio-fields');
+const i2cFields = document.getElementById('i2c-fields');
+
+typeSelect.addEventListener('change', () => {
+    if (typeSelect.value === 'i2c') {
+        gpioFields.style.display = 'none';
+        i2cFields.style.display = 'contents';
+    } else {
+        gpioFields.style.display = 'contents';
+        i2cFields.style.display = 'none';
+    }
+});
+
+// Populate I2C driver dropdown from backend
+async function fetchDrivers() {
+    try {
+        const res = await apiFetch('/drivers');
+        state.drivers = await res.json();
+        const driverSelect = document.getElementById('new-sensor-driver');
+        driverSelect.innerHTML = '<option value="">Select Driver...</option>';
+        for (const [name, info] of Object.entries(state.drivers)) {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = `${name} — ${info.description}`;
+            driverSelect.appendChild(opt);
+        }
+        // Auto-fill address when driver changes
+        driverSelect.addEventListener('change', () => {
+            const info = state.drivers[driverSelect.value];
+            if (info) {
+                document.getElementById('new-sensor-address').value = info.default_address;
+            }
+        });
+    } catch (e) {
+        console.error('Failed to fetch drivers', e);
+    }
+}
+
 document.getElementById('add-sensor-form').onsubmit = async (e) => {
     e.preventDefault();
+    const type = document.getElementById('new-sensor-type').value;
     const newSensor = {
         tag_name: document.getElementById('new-sensor-tag').value,
-        gpio: parseInt(document.getElementById('new-sensor-gpio').value),
-        type: document.getElementById('new-sensor-type').value,
-        direction: document.getElementById('new-sensor-direction').value
+        type: type
     };
-    const sensors = [...(state.config.sensors || []), newSensor];
 
+    if (type === 'i2c') {
+        newSensor.driver = document.getElementById('new-sensor-driver').value;
+        newSensor.address = document.getElementById('new-sensor-address').value;
+        const ch = document.getElementById('new-sensor-channel').value;
+        if (ch !== '') newSensor.channel = parseInt(ch);
+    } else {
+        newSensor.gpio = parseInt(document.getElementById('new-sensor-gpio').value);
+        newSensor.direction = document.getElementById('new-sensor-direction').value;
+    }
+
+    const sensors = [...(state.config.sensors || []), newSensor];
     await apiFetch('/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sensors })
     });
 
-    // Clear form and refetch
     e.target.reset();
+    // Reset type toggle
+    gpioFields.style.display = 'contents';
+    i2cFields.style.display = 'none';
     await fetchConfig();
-    renderPinMap(); // refresh pin map after sensor change
+    renderPinMap();
 };
 
 window.removeSensor = async (index) => {
@@ -378,6 +437,8 @@ function setupWebSocket() {
     };
 }
 
+const UNIT_MAP = { temperature: '°C', humidity: '%', pressure: 'hPa', voltage: 'V' };
+
 const activeTags = new Map();
 function updateWatchlist(data) {
     activeTags.set(data.tag, data);
@@ -386,16 +447,35 @@ function updateWatchlist(data) {
 
     const sensors = state.config?.sensors || [];
     for (const [tag, info] of activeTags.entries()) {
-        const sensor = sensors.find(s => s.tag_name === tag);
-        const isOutput = sensor?.direction === 'output';
+        // Check if this is an I2C sub-tag (format: tagname.field)
+        const dotIdx = tag.lastIndexOf('.');
+        const baseName = dotIdx > 0 ? tag.substring(0, dotIdx) : tag;
+        const fieldName = dotIdx > 0 ? tag.substring(dotIdx + 1) : null;
+        const sensor = sensors.find(s => s.tag_name === baseName || s.tag_name === tag);
+        const isOutput = sensor?.direction === 'output' && sensor?.type !== 'i2c';
+        const isI2C = sensor?.type === 'i2c';
+
         const tr = document.createElement('tr');
-        const outBadge = isOutput ? ' <span style="color:var(--secondary);font-size:0.7rem">OUT</span>' : '';
-        const toggleBtn = isOutput
-            ? ` <button class="btn-toggle-output" data-tag="${tag}" data-val="${info.value ? 'false' : 'true'}" style="margin-left:0.5rem;padding:2px 8px;font-size:0.7rem;border-radius:4px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.08);color:var(--text-main);cursor:pointer">${info.value ? 'Turn OFF' : 'Turn ON'}</button>`
-            : '';
+        let badge = '';
+        let valueDisplay = '';
+
+        if (isI2C && fieldName) {
+            badge = ` <span style="color:var(--accent-blue);font-size:0.7rem">${fieldName}</span>`;
+            const unit = UNIT_MAP[fieldName] || '';
+            valueDisplay = `${info.value}${unit ? ' ' + unit : ''}`;
+        } else if (isOutput) {
+            badge = ' <span style="color:var(--secondary);font-size:0.7rem">OUT</span>';
+            valueDisplay = `${info.value} <button class="btn-toggle-output" data-tag="${tag}" data-val="${info.value ? 'false' : 'true'}" style="margin-left:0.5rem;padding:2px 8px;font-size:0.7rem;border-radius:4px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.08);color:var(--text-main);cursor:pointer">${info.value ? 'Turn OFF' : 'Turn ON'}</button>`;
+        } else {
+            valueDisplay = String(info.value);
+        }
+
+        const isNumeric = typeof info.value === 'number';
+        const valColor = isNumeric ? 'var(--accent-blue)' : (info.value ? 'var(--success)' : 'var(--text-main)');
+
         tr.innerHTML = `
-            <td><strong>${tag}</strong>${outBadge}</td>
-            <td style="color: ${info.value ? 'var(--success)' : 'var(--text-main)'}">${info.value}${toggleBtn}</td>
+            <td><strong>${tag}</strong>${badge}</td>
+            <td style="color: ${valColor}">${valueDisplay}</td>
             <td>${info.quality}</td>
         `;
         tbody.appendChild(tr);

@@ -54,20 +54,28 @@ class HardwareBridge:
             
             self.directions[tag] = direction
             
-            if sensor_type == "gpio":
-                if GPIO_AVAILABLE:
-                    if direction == "output":
-                        self.devices[tag] = DigitalOutputDevice(gpio)
+            try:
+                if sensor_type == "gpio":
+                    if GPIO_AVAILABLE:
+                        if direction == "output":
+                            self.devices[tag] = DigitalOutputDevice(gpio)
+                        else:
+                            self.devices[tag] = DigitalInputDevice(gpio)
                     else:
-                        self.devices[tag] = DigitalInputDevice(gpio)
+                        if direction == "output":
+                            self.devices[tag] = MockOutputDevice(gpio)
+                        else:
+                            self.devices[tag] = MockInputDevice(gpio)
                 else:
-                    if direction == "output":
-                        self.devices[tag] = MockOutputDevice(gpio)
-                    else:
-                        self.devices[tag] = MockInputDevice(gpio)
-            else:
-                # I2C/SPI — mock for now
-                self.devices[tag] = MockInputDevice(gpio)
+                    # I2C/SPI — mock for now
+                    self.devices[tag] = MockInputDevice(gpio)
+            except Exception as e:
+                logger.error(f"Failed to initialize {tag} on GPIO {gpio}: {e}")
+                # Fallback to mock so the tag still shows up
+                if direction == "output":
+                    self.devices[tag] = MockOutputDevice(gpio)
+                else:
+                    self.devices[tag] = MockInputDevice(gpio)
 
     def read_all(self):
         """Read all configured sensors and return dict of {tag: value}"""

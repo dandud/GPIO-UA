@@ -144,7 +144,7 @@ function populateConfigUI() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${sensor.tag_name}</td>
-            <td>${sensor.pin}</td>
+            <td>${sensor.gpio}</td>
             <td>${sensor.type.toUpperCase()}</td>
             <td><button class="btn-danger" onclick="removeSensor(${index})">Remove</button></td>
         `;
@@ -170,7 +170,7 @@ document.getElementById('add-sensor-form').onsubmit = async (e) => {
     e.preventDefault();
     const newSensor = {
         tag_name: document.getElementById('new-sensor-tag').value,
-        pin: parseInt(document.getElementById('new-sensor-pin').value),
+        gpio: parseInt(document.getElementById('new-sensor-gpio').value),
         type: document.getElementById('new-sensor-type').value
     };
     const sensors = [...(state.config.sensors || []), newSensor];
@@ -234,7 +234,7 @@ const PIN_LAYOUT = [
 function buildPinSensorMap() {
     const map = {};
     (state.config?.sensors || []).forEach(s => {
-        map[s.pin] = s;
+        map[s.gpio] = s;
     });
     return map;
 }
@@ -398,7 +398,7 @@ function updatePinMapLive(data) {
 
     // Find the physical pin for this BCM GPIO
     for (const [phys, label, type, bcm] of PIN_LAYOUT) {
-        if (bcm === sensor.pin) {
+        if (bcm === sensor.gpio) {
             const dot = pinElements[phys];
             if (dot) {
                 dot.classList.toggle('pin-value-high', !!data.value);

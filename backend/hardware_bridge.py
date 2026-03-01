@@ -12,8 +12,8 @@ except ImportError:
     logger.warning("gpiozero not available, using mock hardware")
 
 class MockDevice:
-    def __init__(self, pin):
-        self.pin = pin
+    def __init__(self, gpio):
+        self.gpio = gpio
         self.is_active = False
         
     def read(self):
@@ -30,19 +30,19 @@ class HardwareBridge:
         """Initialize hardware connections based on configuration."""
         self.devices.clear()
         for sensor in sensors_config:
-            pin = sensor.get("pin")
+            gpio = sensor.get("gpio")
             tag = sensor.get("tag_name")
             sensor_type = sensor.get("type", "gpio") # gpio, i2c, spi
             
             if sensor_type == "gpio":
                 if GPIO_AVAILABLE:
                     # In real app, be careful about multiple setup on same pin
-                    self.devices[tag] = DigitalInputDevice(pin)
+                    self.devices[tag] = DigitalInputDevice(gpio)
                 else:
-                    self.devices[tag] = MockDevice(pin)
+                    self.devices[tag] = MockDevice(gpio)
             else:
                 # Add I2C/SPI mock later
-                self.devices[tag] = MockDevice(pin)
+                self.devices[tag] = MockDevice(gpio)
 
     def read_all(self):
         """Read all configured sensors and return dict of {tag: value}"""

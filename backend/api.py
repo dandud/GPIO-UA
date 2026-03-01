@@ -27,7 +27,7 @@ logging.getLogger().addHandler(_handler)
 
 class SensorConfig(BaseModel):
     tag_name: str
-    pin: int
+    gpio: int
     type: str = "gpio"
 
 class ConfigUpdate(BaseModel):

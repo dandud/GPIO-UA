@@ -8,13 +8,14 @@ logger = logging.getLogger(__name__)
 
 class OpcUaServerWrapper:
     def __init__(self):
-        self.server = Server()
+        self.server = None
         self.task = None
         self.is_running = False
         self.nodes = {}
         self.directions = {}  # tag -> "input" | "output"
 
     async def init_server(self, config):
+        self.server = Server()  # Fresh instance each time
         await self.server.init()
         self.server.set_endpoint("opc.tcp://0.0.0.0:4840/freeopcua/server/")
         self.server.set_server_name("GPIO-UA Edge Node")
